@@ -5,9 +5,9 @@ USER root
 # 1. Upgrade transformers and install PyTorch/HuggingFace dependencies
 RUN pip install --no-cache-dir --upgrade "transformers>=4.49.0" "tokenizers>=0.21.0" "accelerate>=1.2.0" safetensors
 
-# 2. Clone and install official BFL flux-3-image-klein
+# 2. Clone and install official BFL flux-3-image-klein (standard install without -e)
 RUN git clone --depth 1 https://github.com/black-forest-labs/flux-3-image-klein.git /comfyui/flux-3-image-klein && \
-    pip install --no-cache-dir -e /comfyui/flux-3-image-klein
+    pip install --no-cache-dir /comfyui/flux-3-image-klein
 
 # 3. Create required directories
 RUN mkdir -p /comfyui/custom_nodes/flux3_vton /workspace/weights /comfyui/weights
