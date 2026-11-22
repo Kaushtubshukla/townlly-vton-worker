@@ -16,7 +16,7 @@ for c in candidates_weights:
         os.environ['WEIGHTS_DIR'] = c
         break
 if 'WEIGHTS_DIR' not in os.environ:
-    os.environ['WEIGHTS_DIR'] = '/runpod-volume/weights'
+    os.environ['WEIGHTS_DIR'] = '/workspace/weights'
 
 # 2. Add BFL Klein source to sys.path
 for candidate_src in [
@@ -107,12 +107,35 @@ def get_models():
     global _CACHED_MODELS
     if _CACHED_MODELS is None:
         # Determine actual weights directory
-        w_dir = os.environ.get('WEIGHTS_DIR', '/runpod-volume/weights')
+        w_dir = "/workspace/weights"
         for cand in ["/runpod-volume/weights", "/workspace/weights", "/comfyui/weights"]:
             if os.path.exists(cand):
                 w_dir = cand
                 os.environ['WEIGHTS_DIR'] = cand
                 break
+        os.makedirs(w_dir, exist_ok=True)
+
+        dit = os.path.join(w_dir, 'flux-3-image-klein')
+
+        # Check if essential weights are present on disk
+        has_weights = (
+            os.path.exists(os.path.join(dit, 'model.safetensors')) and
+            os.path.exists(os.path.join(dit, 'text_encoder', 'model.safetensors.index.json'))
+        )
+        if not has_weights:
+            hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+            print(f"[BFL Node] Weights missing at {dit}. Initiating fast multi-threaded download via hf_transfer...")
+            os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+            from huggingface_hub import snapshot_download
+            snapshot_download(
+                repo_id="black-forest-labs/flux-3-image-klein",
+                local_dir=dit,
+                token=hf_token,
+                allow_patterns=["model.safetensors", "ae.safetensors", "text_encoder/*", "config.json"]
+            )
+            print(f"[BFL Node] Fast download complete! Weights verified at {dit}.")
+        else:
+            print(f"[BFL Node] Verified existing weights found on disk at {dit}.")
 
         # Patch flux3.checkpoint flow-map and key inspection
         try:
@@ -158,15 +181,6 @@ def get_models():
             print('[BFL Node] Checkpoint patch warning:', e)
 
         from flux3.generate import Models
-        from flux3.pipeline import dit_path
-
-        dit = os.path.join(w_dir, 'flux-3-image-klein')
-        if not os.path.exists(dit):
-            try:
-                dit = str(dit_path('distilled'))
-            except Exception:
-                dit = os.path.join(w_dir, 'flux-3-image-klein')
-
         print(f'[BFL Node] Initializing Models with dit={dit} (WEIGHTS_DIR={os.environ.get("WEIGHTS_DIR")})...')
         _CACHED_MODELS = Models({'distilled': dit}, None, 0.35)
         print('[BFL Node] Models loaded successfully into GPU VRAM!')
