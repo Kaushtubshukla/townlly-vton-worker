@@ -163,8 +163,21 @@ def get_models():
             if not hf_token:
                 _k = [66, 76, 117, 90, 71, 65, 93, 89, 73, 123, 78, 109, 120, 69, 65, 99, 93, 114, 111, 71, 100, 73, 115, 115, 80, 124, 99, 67, 75, 120, 120, 70, 65, 98, 97, 102, 68]
                 hf_token = ''.join(chr(c ^ 42) for c in _k)
-            print(f"[BFL Node] Weights missing at {dit}. Initiating fast multi-threaded download via hf_transfer...")
-            os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+            
+            # Intelligent hf_transfer handling: install if missing, fallback gracefully
+            try:
+                import hf_transfer
+                os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+            except ImportError:
+                try:
+                    import subprocess
+                    subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "hf_transfer"], check=True)
+                    import hf_transfer
+                    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+                except Exception:
+                    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+
+            print(f"[BFL Node] Weights missing at {dit}. Initiating multi-threaded download (hf_transfer={os.environ.get('HF_HUB_ENABLE_HF_TRANSFER')})...")
             from huggingface_hub import snapshot_download
             snapshot_download(
                 repo_id="black-forest-labs/flux-3-image-klein",
