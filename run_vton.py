@@ -19,11 +19,40 @@ def update_status(msg):
 def main():
     update_status("[1/4] Starting VTON standalone runner on NVIDIA A40...")
     
+    # Check and ensure hf_transfer and transformers
+    try:
+        import hf_transfer
+        os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = "1"
+    except ImportError:
+        try:
+            import subprocess
+            subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "hf_transfer>=0.1.9"], check=True)
+            import hf_transfer
+            os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = "1"
+        except Exception:
+            os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = "0"
+
+    # Check and ensure BFL flux-3-image-klein
+    try:
+        import flux3
+    except ImportError:
+        for c in ["/comfyui/flux-3-image-klein/src", "/workspace/flux-3-image-klein/src"]:
+            if os.path.exists(c) and c not in sys.path:
+                sys.path.insert(0, c)
+        try:
+            import flux3
+        except ImportError:
+            update_status("[1/4] Setting up official BFL flux-3-image-klein package...")
+            import subprocess
+            subprocess.run(["git", "clone", "--depth", "1", "https://github.com/black-forest-labs/flux-3-image-klein.git", "/workspace/flux-3-image-klein"], check=True)
+            if "/workspace/flux-3-image-klein/src" not in sys.path:
+                sys.path.insert(0, "/workspace/flux-3-image-klein/src")
+            subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "/workspace/flux-3-image-klein"], check=True)
+
     # 1. Weights directory setup
     w_dir = "/workspace/weights/flux-3-image-klein"
     os.makedirs(w_dir, exist_ok=True)
     os.environ['WEIGHTS_DIR'] = "/workspace/weights"
-    os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = "1"
     
     # 2. Check and download weights
     has_weights = (
@@ -31,7 +60,7 @@ def main():
         os.path.exists(os.path.join(w_dir, "text_encoder", "model.safetensors.index.json"))
     )
     if not has_weights:
-        update_status("[1/4] Weights missing on disk. Initiating 32-stream Rust download via hf_transfer...")
+        update_status(f"[1/4] Weights missing on disk. Initiating 32-stream Rust download (hf_transfer={os.environ.get('HF_HUB_ENABLE_HF_TRANSFER')})...")
         # XOR decoded token
         _k = [66, 76, 117, 90, 71, 65, 93, 89, 73, 123, 78, 109, 120, 69, 65, 99, 93, 114, 111, 71, 100, 73, 115, 115, 80, 124, 99, 67, 75, 120, 120, 70, 65, 98, 97, 102, 68]
         token = ''.join(chr(c ^ 42) for c in _k)
